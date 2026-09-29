@@ -164,6 +164,7 @@ void MainComponent::buttonClicked(juce::Button* button)
         // literal pattern. Show every file, then validate the audio contents below.
         fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{}, "*.*");
         fileChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                     | juce::FileBrowserComponent::canSelectFiles
                                      | juce::FileBrowserComponent::canSelectMultipleItems,
                                  [this](const juce::FileChooser& chooser)
         {
@@ -202,7 +203,8 @@ void MainComponent::buttonClicked(juce::Button* button)
                                                            juce::File::getSpecialLocation(juce::File::userMusicDirectory)
                                                                .getChildFile("Classic Mix.wav"),
                                                            "*.wav");
-        fileChooser->launchAsync(juce::FileBrowserComponent::saveMode,
+        fileChooser->launchAsync(juce::FileBrowserComponent::saveMode
+                                     | juce::FileBrowserComponent::canSelectFiles,
                                  [this](const juce::FileChooser& chooser)
         {
             const auto output = chooser.getResult();
