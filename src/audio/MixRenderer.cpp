@@ -25,7 +25,7 @@ bool createWriter(const juce::File& file,
     stream = file.createOutputStream();
     if (stream == nullptr)
     {
-        error = "Não foi possível criar o arquivo de saída.";
+        error = juce::String::fromUTF8("Não foi possível criar o arquivo de saída.");
         return false;
     }
 
@@ -33,7 +33,7 @@ bool createWriter(const juce::File& file,
     writer.reset(format.createWriterFor(stream.get(), sampleRate, channels, 24, {}, 0));
     if (writer == nullptr)
     {
-        error = "Não foi possível preparar o WAV de saída.";
+        error = juce::String::fromUTF8("Não foi possível preparar o WAV de saída.");
         return false;
     }
 
@@ -83,7 +83,7 @@ bool MixRenderer::render(const std::vector<MixTrack>& tracks,
 
     if (readers.empty() || totalSamples <= 0)
     {
-        error = "Nenhuma faixa analisada pôde ser aberta para renderização.";
+        error = juce::String::fromUTF8("Nenhuma faixa analisada pôde ser aberta para renderização.");
         return false;
     }
 
@@ -155,7 +155,7 @@ bool MixRenderer::render(const std::vector<MixTrack>& tracks,
     const auto premasterAnalysis = analyzer.analyze(temporaryFile);
     if (! premasterAnalysis.valid)
     {
-        error = "A mix foi renderizada, mas não pôde ser analisada para a etapa de masterização.";
+        error = juce::String::fromUTF8("A mix foi renderizada, mas não pôde ser analisada para a etapa de masterização.");
         temporaryFile.deleteFile();
         return false;
     }
@@ -169,7 +169,7 @@ bool MixRenderer::render(const std::vector<MixTrack>& tracks,
     std::unique_ptr<juce::AudioFormatReader> premasterReader(formats.createReaderFor(temporaryFile));
     if (premasterReader == nullptr)
     {
-        error = "Não foi possível reabrir o premaster para finalizar a masterização.";
+        error = juce::String::fromUTF8("Não foi possível reabrir o premaster para finalizar a masterização.");
         temporaryFile.deleteFile();
         return false;
     }

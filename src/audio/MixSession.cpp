@@ -3,10 +3,19 @@
 
 bool MixSession::importFiles(const juce::Array<juce::File>& files, juce::String& error)
 {
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+
     bool imported = false;
     for (const auto& file : files)
     {
         if (! file.existsAsFile())
+            continue;
+
+        // Probe the file before adding it so the UI reports unsupported or
+        // damaged WAV files immediately instead of failing later during mix analysis.
+        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+        if (reader == nullptr)
             continue;
 
         MixTrack track;
@@ -19,7 +28,7 @@ bool MixSession::importFiles(const juce::Array<juce::File>& files, juce::String&
 
     if (! imported)
     {
-        error = "Nenhuma faixa de áudio válida foi selecionada.";
+        error = juce::String::fromUTF8("Nenhuma faixa de áudio válida foi selecionada.");
         return false;
     }
 
