@@ -22,7 +22,7 @@ bool createWriter(const juce::File& file,
                   std::unique_ptr<juce::AudioFormatWriter>& writer,
                   juce::String& error)
 {
-    stream.reset(file.createOutputStream());
+    stream = file.createOutputStream();
     if (stream == nullptr)
     {
         error = "Não foi possível criar o arquivo de saída.";
