@@ -22,6 +22,15 @@ O primeiro renderizador gera uma mix estéreo nova, aplica ganho e panorama por 
 
 O processamento é offline e reversível. Nenhuma alteração é escrita nos arquivos importados. Cada render gera um novo arquivo e salva o plano usado para que a mix possa ser repetida.
 
+## Usar o GPT
+
+1. Abra o aplicativo e clique em **Configurar GPT**.
+2. Cole sua chave da API da OpenAI no campo exibido e salve. A chave fica somente no Mac, em `~/Library/Application Support/Classic Mix/gpt-api-key.txt`, e não é enviada para o GitHub.
+3. Importe os stems e clique em **Analisar e criar mix**. O aplicativo extrai as métricas localmente e envia apenas essas métricas ao GPT; os arquivos de áudio não saem do computador.
+4. Revise o plano mostrado e clique em **Renderizar WAV**.
+
+Se nenhuma chave for configurada, o aplicativo continua funcionando com um plano local de fallback.
+
 ## Build no macOS
 
 ```sh

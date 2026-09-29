@@ -28,6 +28,7 @@ target_sources(ClassicMix PRIVATE
     src/main.cpp
     src/analysis/AudioAnalyzer.cpp
     src/ai/MixPlanner.cpp
+    src/ai/OpenAiMixService.cpp
     src/audio/MixSession.cpp
     src/audio/MixRenderer.cpp
     src/ui/MainComponent.cpp
