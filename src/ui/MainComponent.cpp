@@ -57,9 +57,10 @@ public:
             if (usedAi)
                 safeOwner->setStatus("GPT analisou os stems e criou o plano. Revise e renderize a mix.");
             else if (error.isNotEmpty())
-                safeOwner->setStatus("GPT indisponível: " + error + " Plano local criado.");
+                safeOwner->setStatus(juce::String::fromUTF8("GPT indisponível: ") + error
+                                     + juce::String::fromUTF8(" Plano local criado."));
             else
-                safeOwner->setStatus("GPT não está configurado; plano local criado. Use Configurar GPT para ativar a IA.");
+                safeOwner->setStatus(juce::String::fromUTF8("GPT não está configurado; plano local criado. Use Configurar GPT para ativar a IA."));
 
             safeOwner->analyzeButton.setEnabled(true);
             safeOwner->importButton.setEnabled(true);
@@ -83,7 +84,7 @@ MainComponent::MainComponent()
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f6f8));
     addAndMakeVisible(title);
 
-    subtitle.setText("Mixagem e masterização assistidas por IA", juce::dontSendNotification);
+    subtitle.setText(juce::String::fromUTF8("Mixagem e masterização assistidas por IA"), juce::dontSendNotification);
     subtitle.setFont(juce::Font(14.0f));
     subtitle.setColour(juce::Label::textColourId, juce::Colour(0xff9eb1bd));
     addAndMakeVisible(subtitle);
@@ -96,11 +97,11 @@ MainComponent::MainComponent()
     analyzeButton.setEnabled(false);
     renderButton.setEnabled(false);
 
-    status.setText("Importe os stems para começar.", juce::dontSendNotification);
+    status.setText(juce::String::fromUTF8("Importe os stems para começar."), juce::dontSendNotification);
     status.setColour(juce::Label::textColourId, juce::Colour(0xffb8c7cf));
     addAndMakeVisible(status);
 
-    planLabel.setText("O plano da IA aparecerá aqui depois da análise.", juce::dontSendNotification);
+    planLabel.setText(juce::String::fromUTF8("O plano da IA aparecerá aqui depois da análise."), juce::dontSendNotification);
     planLabel.setColour(juce::Label::textColourId, juce::Colour(0xffc5d4db));
     planLabel.setJustificationType(juce::Justification::topLeft);
     planLabel.setMinimumHorizontalScale(0.5f);
@@ -159,8 +160,9 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &importButton)
     {
-        fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{},
-                                                          "*.wav;*.WAV;*.wave;*.WAVE;*.aif;*.AIF;*.aiff;*.AIFF;*.flac;*.FLAC;*.mp3;*.MP3");
+        // macOS's native dialog can treat a long semicolon-separated mask as a
+        // literal pattern. Show every file, then validate the audio contents below.
+        fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{}, "*.*");
         fileChooser->launchAsync(juce::FileBrowserComponent::openMode
                                      | juce::FileBrowserComponent::canSelectMultipleItems,
                                  [this](const juce::FileChooser& chooser)
@@ -187,7 +189,7 @@ void MainComponent::buttonClicked(juce::Button* button)
     else if (button == &analyzeButton)
     {
         setStatus(session.hasAiApiKey() ? "Analisando stems e consultando o GPT..."
-                                        : "Analisando stems localmente; GPT ainda não foi configurado...");
+                                        : juce::String::fromUTF8("Analisando stems localmente; GPT ainda não foi configurado..."));
         analyzeButton.setEnabled(false);
         importButton.setEnabled(false);
         renderButton.setEnabled(false);
@@ -209,7 +211,7 @@ void MainComponent::buttonClicked(juce::Button* button)
                 return;
 
             juce::String error;
-            setStatus("Renderizando mix e masterização inicial...");
+            setStatus(juce::String::fromUTF8("Renderizando mix e masterização inicial..."));
             renderButton.setEnabled(false);
             juce::Timer::callAfterDelay(10, [this, output, error]() mutable
             {
@@ -232,7 +234,7 @@ void MainComponent::buttonClicked(juce::Button* button)
         session.clear();
         lastPlan = {};
         refreshTrackList();
-        planLabel.setText("O plano da IA aparecerá aqui depois da análise.", juce::dontSendNotification);
+        planLabel.setText(juce::String::fromUTF8("O plano da IA aparecerá aqui depois da análise."), juce::dontSendNotification);
         analyzeButton.setEnabled(false);
         renderButton.setEnabled(false);
         setStatus("Sessão limpa.");
@@ -264,7 +266,7 @@ void MainComponent::setStatus(const juce::String& message)
 void MainComponent::configureGpt()
 {
     auto* alert = new juce::AlertWindow("Configurar GPT",
-                                        "A chave será salva somente neste Mac e nunca será enviada ao GitHub.",
+                                        juce::String::fromUTF8("A chave será salva somente neste Mac e nunca será enviada ao GitHub."),
                                         juce::MessageBoxIconType::NoIcon);
     alert->addTextEditor("apiKey", {}, "Chave da API", false);
     alert->getTextEditor("apiKey")->setText(OpenAiMixService::loadApiKey(), false);
@@ -278,7 +280,7 @@ void MainComponent::configureGpt()
                                    juce::String error;
                                    if (session.saveAiApiKey(alert->getTextEditorContents("apiKey"), error))
                                        setStatus(session.hasAiApiKey() ? "GPT configurado neste Mac."
-                                                                       : "Chave do GPT removida; o plano local continuará disponível.");
+                                                                       : juce::String::fromUTF8("Chave do GPT removida; o plano local continuará disponível."));
                                    else
                                        setStatus(error);
                                }
