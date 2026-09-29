@@ -1,4 +1,5 @@
 #include "MixPlanner.h"
+#include "OpenAiMixService.h"
 
 MixPlanner::Result MixPlanner::createPlan(const std::vector<MixTrack>& tracks) const
 {
@@ -34,3 +35,12 @@ MixPlanner::Result MixPlanner::createPlan(const std::vector<MixTrack>& tracks) c
     return result;
 }
 
+MixPlanner::Result MixPlanner::createPlanWithGpt(const std::vector<MixTrack>& tracks, juce::String& error) const
+{
+    auto result = createPlan(tracks);
+    OpenAiMixService service;
+    if (! service.requestPlan(tracks, result, error))
+        return result;
+
+    return result;
+}

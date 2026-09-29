@@ -14,5 +14,5 @@ public:
     };
 
     Result createPlan(const std::vector<MixTrack>& tracks) const;
+    Result createPlanWithGpt(const std::vector<MixTrack>& tracks, juce::String& error) const;
 };
-
