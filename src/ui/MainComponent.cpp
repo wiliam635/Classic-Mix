@@ -159,7 +159,8 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &importButton)
     {
-        fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{}, "*.wav;*.aiff;*.flac;*.mp3");
+        fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{},
+                                                          "*.wav;*.WAV;*.wave;*.WAVE;*.aif;*.AIF;*.aiff;*.AIFF;*.flac;*.FLAC;*.mp3;*.MP3");
         fileChooser->launchAsync(juce::FileBrowserComponent::openMode
                                      | juce::FileBrowserComponent::canSelectMultipleItems,
                                  [this](const juce::FileChooser& chooser)
