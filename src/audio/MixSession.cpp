@@ -57,14 +57,14 @@ MixPlanner::Result MixSession::createPlanWithGpt(juce::String& error) const
     return planner.createPlanWithGpt(tracks, error);
 }
 
-bool MixSession::hasAiApiKey() const
+bool MixSession::hasLocalAiModel() const
 {
-    return OpenAiMixService::hasApiKey();
+    return OpenAiMixService::hasLocalModel();
 }
 
-bool MixSession::saveAiApiKey(const juce::String& key, juce::String& error) const
+bool MixSession::saveLocalAiModel(const juce::String& model, juce::String& error) const
 {
-    return OpenAiMixService::saveApiKey(key, error);
+    return OpenAiMixService::saveLocalModel(model, error);
 }
 
 bool MixSession::renderMix(const MixPlanner::Result& plan,
