@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "../ai/OpenAiMixService.h"
 
 class MainComponent::TrackListModel final : public juce::ListBoxModel
 {
@@ -31,6 +32,49 @@ private:
     const std::vector<MixTrack>& tracks;
 };
 
+class MainComponent::PlanJob final : public juce::ThreadPoolJob
+{
+public:
+    explicit PlanJob(MainComponent& owner) : ThreadPoolJob("GPT mix analysis"), owner(owner) {}
+
+    JobStatus runJob() override
+    {
+        owner.session.analyzeAll();
+        juce::String error;
+        auto plan = owner.session.createPlanWithGpt(error);
+        const auto usedAi = plan.usedAi;
+        juce::Component::SafePointer<MainComponent> safeOwner(&owner);
+
+        juce::MessageManager::callAsync([safeOwner, plan = std::move(plan), error, usedAi]() mutable
+        {
+            if (safeOwner == nullptr)
+                return;
+
+            safeOwner->lastPlan = std::move(plan);
+            safeOwner->refreshTrackList();
+            safeOwner->planLabel.setText(safeOwner->lastPlan.summary + "\n\n" + safeOwner->lastPlan.master.rationale,
+                                         juce::dontSendNotification);
+            if (usedAi)
+                safeOwner->setStatus("GPT analisou os stems e criou o plano. Revise e renderize a mix.");
+            else if (error.isNotEmpty())
+                safeOwner->setStatus("GPT indisponível: " + error + " Plano local criado.");
+            else
+                safeOwner->setStatus("GPT não está configurado; plano local criado. Use Configurar GPT para ativar a IA.");
+
+            safeOwner->analyzeButton.setEnabled(true);
+            safeOwner->importButton.setEnabled(true);
+            safeOwner->clearButton.setEnabled(true);
+            safeOwner->renderButton.setEnabled(! safeOwner->lastPlan.tracks.empty());
+        });
+
+        ignoreUnused(error);
+        return jobHasFinished;
+    }
+
+private:
+    MainComponent& owner;
+};
+
 MainComponent::MainComponent()
 {
     setOpaque(true);
@@ -44,7 +88,7 @@ MainComponent::MainComponent()
     subtitle.setColour(juce::Label::textColourId, juce::Colour(0xff9eb1bd));
     addAndMakeVisible(subtitle);
 
-    for (auto* button : { &importButton, &analyzeButton, &renderButton, &clearButton })
+    for (auto* button : { &importButton, &analyzeButton, &renderButton, &configureButton, &clearButton })
     {
         button->addListener(this);
         addAndMakeVisible(button);
@@ -70,9 +114,10 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    analysisPool.removeAllJobs(true, 60000);
     trackList.setModel(nullptr);
     trackModel.reset();
-    for (auto* button : { &importButton, &analyzeButton, &renderButton, &clearButton })
+    for (auto* button : { &importButton, &analyzeButton, &renderButton, &configureButton, &clearButton })
         button->removeListener(this);
 }
 
@@ -97,6 +142,7 @@ void MainComponent::resized()
     importButton.setBounds(controls.removeFromLeft(150));
     analyzeButton.setBounds(controls.removeFromLeft(190).withTrimmedLeft(10));
     renderButton.setBounds(controls.removeFromLeft(150).withTrimmedLeft(20));
+    configureButton.setBounds(controls.removeFromLeft(140).withTrimmedLeft(20));
     clearButton.setBounds(controls.removeFromLeft(90).withTrimmedLeft(20));
     status.setBounds(controls.withTrimmedLeft(18));
 
@@ -107,7 +153,11 @@ void MainComponent::resized()
 
 void MainComponent::buttonClicked(juce::Button* button)
 {
-    if (button == &importButton)
+    if (button == &configureButton)
+    {
+        configureGpt();
+    }
+    else if (button == &importButton)
     {
         fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{}, "*.wav;*.aiff;*.flac;*.mp3");
         fileChooser->launchAsync(juce::FileBrowserComponent::openMode
@@ -135,18 +185,13 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &analyzeButton)
     {
-        setStatus("Analisando áudio localmente...");
+        setStatus(session.hasAiApiKey() ? "Analisando stems e consultando o GPT..."
+                                        : "Analisando stems localmente; GPT ainda não foi configurado...");
         analyzeButton.setEnabled(false);
-        juce::Timer::callAfterDelay(10, [this]
-        {
-            session.analyzeAll();
-            lastPlan = session.createPlan();
-            refreshTrackList();
-            planLabel.setText(lastPlan.summary + "\n\n" + lastPlan.master.rationale, juce::dontSendNotification);
-            setStatus("Análise concluída. Plano inicial criado sem alterar os arquivos originais.");
-            analyzeButton.setEnabled(true);
-            renderButton.setEnabled(! lastPlan.tracks.empty());
-        });
+        importButton.setEnabled(false);
+        renderButton.setEnabled(false);
+        clearButton.setEnabled(false);
+        analysisPool.addJob(new PlanJob(*this), true);
     }
     else if (button == &renderButton)
     {
@@ -213,4 +258,29 @@ void MainComponent::refreshTrackList()
 void MainComponent::setStatus(const juce::String& message)
 {
     pendingStatus = message;
+}
+
+void MainComponent::configureGpt()
+{
+    auto* alert = new juce::AlertWindow("Configurar GPT",
+                                        "A chave será salva somente neste Mac e nunca será enviada ao GitHub.",
+                                        juce::MessageBoxIconType::NoIcon);
+    alert->addTextEditor("apiKey", {}, "Chave da API", false, false, true);
+    alert->getTextEditor("apiKey")->setText(OpenAiMixService::loadApiKey(), false);
+    alert->addButton("Salvar", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    alert->addButton("Cancelar", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+    alert->enterModalState(true,
+                           juce::ModalCallbackFunction::create([this, alert](int result)
+                           {
+                               if (result == 1)
+                               {
+                                   juce::String error;
+                                   if (session.saveAiApiKey(alert->getTextEditorContents("apiKey"), error))
+                                       setStatus(session.hasAiApiKey() ? "GPT configurado neste Mac."
+                                                                       : "Chave do GPT removida; o plano local continuará disponível.");
+                                   else
+                                       setStatus(error);
+                               }
+                           }),
+                           true);
 }
