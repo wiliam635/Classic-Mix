@@ -22,6 +22,15 @@ juce::String stringProperty(const juce::var& object, const char* name, const juc
     return value.isVoid() ? fallback : value.toString();
 }
 
+juce::String shorten(const juce::String& value, int maximumLength = 480)
+{
+    const auto trimmed = value.trim();
+    if (trimmed.length() <= maximumLength)
+        return trimmed;
+
+    return trimmed.substring(0, maximumLength) + juce::String::fromUTF8("…");
+}
+
 bool boolProperty(const juce::var& object, const char* name, bool fallback)
 {
     const auto value = getProperty(object, name);
@@ -77,12 +86,39 @@ const char* schemaJson()
     })json";
 }
 
-juce::String extractOutputText(const juce::var& response)
+juce::String extractApiError(const juce::var& response)
 {
-    auto text = stringProperty(response, "output_text", {});
-    if (text.isNotEmpty())
-        return text;
+    const auto apiError = getProperty(response, "error");
+    if (apiError.getDynamicObject() != nullptr)
+    {
+        auto message = stringProperty(apiError, "message", {});
+        const auto type = stringProperty(apiError, "type", {});
+        const auto code = stringProperty(apiError, "code", {});
 
+        if (message.isNotEmpty())
+        {
+            if (type.isNotEmpty())
+                message += " [" + type + "]";
+            if (code.isNotEmpty())
+                message += " (" + code + ")";
+            return message;
+        }
+    }
+
+    if (stringProperty(response, "status", {}) == "incomplete")
+    {
+        const auto details = getProperty(response, "incomplete_details");
+        const auto reason = stringProperty(details, "reason", {});
+        return reason.isNotEmpty()
+            ? juce::String::fromUTF8("Resposta incompleta: ") + reason
+            : juce::String::fromUTF8("Resposta incompleta.");
+    }
+
+    return {};
+}
+
+juce::String extractRefusal(const juce::var& response)
+{
     const auto output = getProperty(response, "output");
     const auto* outputArray = output.getArray();
     if (outputArray == nullptr)
@@ -97,12 +133,53 @@ juce::String extractOutputText(const juce::var& response)
 
         for (const auto& contentItem : *contentArray)
         {
-            if (stringProperty(contentItem, "type", {}) == "output_text")
-                return stringProperty(contentItem, "text", {});
+            if (stringProperty(contentItem, "type", {}) == "refusal")
+            {
+                const auto refusal = stringProperty(contentItem, "refusal", {});
+                return refusal.isNotEmpty()
+                    ? refusal
+                    : juce::String::fromUTF8("O GPT recusou gerar o plano.");
+            }
         }
     }
 
     return {};
+}
+
+juce::String extractOutputText(const juce::var& response)
+{
+    auto text = stringProperty(response, "output_text", {});
+    if (text.isNotEmpty())
+        return text;
+
+    const auto output = getProperty(response, "output");
+    const auto* outputArray = output.getArray();
+    if (outputArray == nullptr)
+        return {};
+
+    juce::String combinedText;
+
+    for (const auto& outputItem : *outputArray)
+    {
+        const auto content = getProperty(outputItem, "content");
+        const auto* contentArray = content.getArray();
+        if (contentArray == nullptr)
+            continue;
+
+        for (const auto& contentItem : *contentArray)
+        {
+            if (stringProperty(contentItem, "type", {}) == "output_text")
+                combinedText += stringProperty(contentItem, "text", {});
+
+            // Some SDKs expose the parsed Structured Output alongside the text.
+            // Accept it as a fallback so the app is not tied to one response shape.
+            const auto parsed = getProperty(contentItem, "parsed");
+            if (! parsed.isVoid() && parsed.getDynamicObject() != nullptr)
+                return juce::JSON::toString(parsed, false);
+        }
+    }
+
+    return combinedText;
 }
 
 juce::var buildMetrics(const std::vector<MixTrack>& tracks)
@@ -202,6 +279,7 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
 
     auto* requestObject = new juce::DynamicObject();
     requestObject->setProperty("model", "gpt-6-astra");
+    requestObject->setProperty("store", false);
     requestObject->setProperty("input",
         juce::String::fromUTF8("Você é um engenheiro de mixagem e masterização. Analise as métricas dos stems abaixo e devolva apenas o JSON solicitado. ")
         + juce::String::fromUTF8("Faça decisões conservadoras, preserve dinâmica, não invente instrumentos e explique brevemente cada decisão. ")
@@ -233,10 +311,42 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
 
     const auto responseText = stream->readEntireStreamAsString();
     const auto response = juce::JSON::parse(responseText);
+
+    if (response.isVoid())
+    {
+        error = juce::String::fromUTF8("O GPT devolveu uma resposta inválida (HTTP ")
+              + juce::String(statusCode) + ").";
+        const auto detail = shorten(responseText);
+        if (detail.isNotEmpty())
+            error += " " + detail;
+        return false;
+    }
+
+    const auto apiError = extractApiError(response);
+    if (apiError.isNotEmpty())
+    {
+        error = juce::String::fromUTF8("O GPT rejeitou a solicitação (HTTP ")
+              + juce::String(statusCode) + "): " + shorten(apiError);
+        return false;
+    }
+
+    const auto refusal = extractRefusal(response);
+    if (refusal.isNotEmpty())
+    {
+        error = juce::String::fromUTF8("O GPT recusou o plano: ") + shorten(refusal);
+        return false;
+    }
+
     const auto outputText = extractOutputText(response);
     if (outputText.isEmpty())
     {
-        error = juce::String::fromUTF8("O GPT não retornou um plano estruturado.");
+        error = juce::String::fromUTF8("O GPT não retornou um plano estruturado (HTTP ")
+              + juce::String(statusCode) + ").";
+
+        const auto responseId = stringProperty(response, "id", {});
+        if (responseId.isNotEmpty())
+            error += " ID: " + responseId + ".";
+
         return false;
     }
 
