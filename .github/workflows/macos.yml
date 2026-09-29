@@ -1,0 +1,36 @@
+name: Classic Mix macOS Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install CMake and Ninja
+        run: brew install cmake ninja
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Sign app ad hoc
+        run: codesign --force --deep --sign - build/ClassicMix_artefacts/Release/Classic\ Mix.app
+
+      - name: Package DMG
+        run: hdiutil create -volname "Classic Mix" -srcfolder build/ClassicMix_artefacts/Release/Classic\ Mix.app -ov -format UDZO Classic-Mix-mac.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: classic-mix-macos
+          path: Classic-Mix-mac.dmg
+
