@@ -18,7 +18,7 @@ TrackAnalysis AudioAnalyzer::analyze(const juce::File& file) const
     std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
     if (reader == nullptr)
     {
-        result.error = "Formato de áudio não reconhecido";
+        result.error = juce::String::fromUTF8("Formato de áudio não reconhecido");
         return result;
     }
 
@@ -30,7 +30,7 @@ TrackAnalysis AudioAnalyzer::analyze(const juce::File& file) const
 
     if (reader->lengthInSamples <= 0 || reader->numChannels == 0)
     {
-        result.error = "Arquivo sem áudio";
+        result.error = juce::String::fromUTF8("Arquivo sem áudio");
         return result;
     }
 
