@@ -265,7 +265,7 @@ void MainComponent::configureGpt()
     auto* alert = new juce::AlertWindow("Configurar GPT",
                                         "A chave será salva somente neste Mac e nunca será enviada ao GitHub.",
                                         juce::MessageBoxIconType::NoIcon);
-    alert->addTextEditor("apiKey", {}, "Chave da API", false, false, true);
+    alert->addTextEditor("apiKey", {}, "Chave da API", false);
     alert->getTextEditor("apiKey")->setText(OpenAiMixService::loadApiKey(), false);
     alert->addButton("Salvar", 1, juce::KeyPress(juce::KeyPress::returnKey));
     alert->addButton("Cancelar", 0, juce::KeyPress(juce::KeyPress::escapeKey));
