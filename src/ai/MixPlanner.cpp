@@ -31,7 +31,7 @@ MixPlanner::Result MixPlanner::createPlan(const std::vector<MixTrack>& tracks) c
 
     result.summary = tracks.empty()
         ? juce::String::fromUTF8("Importe stems para gerar a primeira análise.")
-        : juce::String::fromUTF8("Análise concluída. Este é um plano inicial conservador; conecte um provedor de IA para refinamento musical.");
+        : juce::String::fromUTF8("Análise concluída. Este é um plano inicial conservador; a IA local poderá refiná-lo.");
     return result;
 }
 

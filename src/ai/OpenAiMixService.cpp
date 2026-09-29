@@ -31,6 +31,22 @@ juce::String shorten(const juce::String& value, int maximumLength = 480)
     return trimmed.substring(0, maximumLength) + juce::String::fromUTF8("…");
 }
 
+juce::String cleanJsonText(juce::String value)
+{
+    value = value.trim();
+    if (! value.startsWith("```"))
+        return value;
+
+    const auto firstLineBreak = value.indexOfChar('\n');
+    if (firstLineBreak >= 0)
+        value = value.substring(firstLineBreak + 1);
+
+    if (value.trimEnd().endsWith("```"))
+        value = value.trimEnd().dropLastCharacters(3);
+
+    return value.trim();
+}
+
 bool boolProperty(const juce::var& object, const char* name, bool fallback)
 {
     const auto value = getProperty(object, name);
@@ -224,6 +240,13 @@ juce::File OpenAiMixService::settingsFile()
         .getChildFile("gpt-api-key.txt");
 }
 
+juce::File OpenAiMixService::localModelFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Classic Mix")
+        .getChildFile("local-model.txt");
+}
+
 juce::String OpenAiMixService::loadApiKey()
 {
     const auto environmentKey = juce::SystemStats::getEnvironmentVariable("OPENAI_API_KEY", {}).trim();
@@ -266,46 +289,94 @@ bool OpenAiMixService::hasApiKey()
     return loadApiKey().isNotEmpty();
 }
 
+juce::String OpenAiMixService::loadLocalModel()
+{
+    const auto environmentModel = juce::SystemStats::getEnvironmentVariable("CLASSIC_MIX_LOCAL_MODEL", {}).trim();
+    if (environmentModel.isNotEmpty())
+        return environmentModel;
+
+    const auto file = localModelFile();
+    if (file.existsAsFile())
+    {
+        const auto configuredModel = file.loadFileAsString().trim();
+        if (configuredModel.isNotEmpty())
+            return configuredModel;
+    }
+
+    return "llama3.2:3b";
+}
+
+bool OpenAiMixService::saveLocalModel(const juce::String& model, juce::String& error)
+{
+    const auto file = localModelFile();
+    if (! file.getParentDirectory().createDirectory())
+    {
+        error = juce::String::fromUTF8("Não foi possível criar a pasta de configuração da IA local.");
+        return false;
+    }
+
+    const auto trimmed = model.trim();
+    if (trimmed.isEmpty())
+    {
+        file.deleteFile();
+        error.clear();
+        return true;
+    }
+
+    if (! file.replaceWithText(trimmed + "\n"))
+    {
+        error = juce::String::fromUTF8("Não foi possível salvar o modelo local.");
+        return false;
+    }
+
+    error.clear();
+    return true;
+}
+
+bool OpenAiMixService::hasLocalModel()
+{
+    return loadLocalModel().isNotEmpty();
+}
+
 bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
                                    MixPlanner::Result& result,
                                    juce::String& error) const
 {
-    const auto apiKey = loadApiKey();
-    if (apiKey.isEmpty())
-    {
-        error = juce::String::fromUTF8("GPT não configurado. Use Configurar GPT ou defina OPENAI_API_KEY.");
-        return false;
-    }
-
+    const auto model = loadLocalModel();
     auto* requestObject = new juce::DynamicObject();
-    requestObject->setProperty("model", "gpt-6-astra");
-    requestObject->setProperty("store", false);
-    requestObject->setProperty("input",
-        juce::String::fromUTF8("Você é um engenheiro de mixagem e masterização. Analise as métricas dos stems abaixo e devolva apenas o JSON solicitado. ")
-        + juce::String::fromUTF8("Faça decisões conservadoras, preserve dinâmica, não invente instrumentos e explique brevemente cada decisão. ")
-        + juce::String::fromUTF8("As faixas originais serão processadas localmente pelo aplicativo.\n\n") +
+    requestObject->setProperty("model", model);
+    requestObject->setProperty("system",
+        juce::String::fromUTF8("Você é um engenheiro de mixagem e masterização. "
+                               "Responda somente com um objeto JSON válido conforme o schema. "
+                               "Faça decisões conservadoras, preserve dinâmica, não invente instrumentos "
+                               "e explique brevemente cada decisão."));
+    requestObject->setProperty("prompt",
+        juce::String::fromUTF8("Analise as métricas dos stems abaixo. As faixas originais permanecem no computador. "
+                               "Retorne um plano por faixa, sem criar faixas novas.\n\n") +
         juce::JSON::toString(buildMetrics(tracks), false));
+    requestObject->setProperty("format", juce::JSON::parse(schemaJson()));
+    requestObject->setProperty("stream", false);
+    requestObject->setProperty("think", false);
+    requestObject->setProperty("keep_alive", 0);
 
-    auto format = juce::JSON::parse(
-        "{\"type\":\"json_schema\",\"name\":\"mix_plan\",\"strict\":true,\"schema\":" + juce::String(schemaJson()) + "}");
-    auto* textObject = new juce::DynamicObject();
-    textObject->setProperty("format", format);
-    requestObject->setProperty("text", juce::var(textObject));
+    auto* optionsObject = new juce::DynamicObject();
+    optionsObject->setProperty("temperature", 0.1);
+    requestObject->setProperty("options", juce::var(optionsObject));
 
     const auto payload = juce::JSON::toString(juce::var(requestObject), false);
     int statusCode = 0;
     auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
         .withHttpRequestCmd("POST")
-        .withExtraHeaders("Authorization: Bearer " + apiKey + "\r\nContent-Type: application/json\r\n")
-        .withConnectionTimeoutMs(45000)
+        .withExtraHeaders("Content-Type: application/json\r\n")
+        .withConnectionTimeoutMs(120000)
         .withStatusCode(&statusCode);
 
-    juce::URL url("https://api.openai.com/v1/responses");
+    juce::URL url("http://127.0.0.1:11434/api/generate");
     std::unique_ptr<juce::InputStream> stream(url.withPOSTData(payload).createInputStream(options));
     if (stream == nullptr)
     {
-        error = juce::String::fromUTF8("Não foi possível conectar ao GPT (HTTP ") + juce::String(statusCode)
-              + juce::String::fromUTF8(").");
+        error = juce::String::fromUTF8("O Ollama não respondeu. Instale-o, abra o aplicativo Ollama e baixe o modelo ")
+              + model + juce::String::fromUTF8(" (HTTP ") + juce::String(statusCode) + ").";
         return false;
     }
 
@@ -314,7 +385,7 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
 
     if (response.isVoid())
     {
-        error = juce::String::fromUTF8("O GPT devolveu uma resposta inválida (HTTP ")
+        error = juce::String::fromUTF8("A IA local devolveu uma resposta inválida (HTTP ")
               + juce::String(statusCode) + ").";
         const auto detail = shorten(responseText);
         if (detail.isNotEmpty())
@@ -322,38 +393,26 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
         return false;
     }
 
-    const auto apiError = extractApiError(response);
-    if (apiError.isNotEmpty())
+    const auto localError = getProperty(response, "error");
+    if (! localError.isVoid())
     {
-        error = juce::String::fromUTF8("O GPT rejeitou a solicitação (HTTP ")
-              + juce::String(statusCode) + "): " + shorten(apiError);
+        error = juce::String::fromUTF8("O Ollama não conseguiu gerar o plano: ")
+              + shorten(localError.toString());
         return false;
     }
 
-    const auto refusal = extractRefusal(response);
-    if (refusal.isNotEmpty())
-    {
-        error = juce::String::fromUTF8("O GPT recusou o plano: ") + shorten(refusal);
-        return false;
-    }
-
-    const auto outputText = extractOutputText(response);
+    const auto outputText = cleanJsonText(stringProperty(response, "response", {}));
     if (outputText.isEmpty())
     {
-        error = juce::String::fromUTF8("O GPT não retornou um plano estruturado (HTTP ")
-              + juce::String(statusCode) + ").";
-
-        const auto responseId = stringProperty(response, "id", {});
-        if (responseId.isNotEmpty())
-            error += " ID: " + responseId + ".";
-
+        error = juce::String::fromUTF8("A IA local não retornou um plano estruturado (HTTP ")
+              + juce::String(statusCode) + "). Verifique se o modelo suporta saída JSON.";
         return false;
     }
 
     const auto plan = juce::JSON::parse(outputText);
     if (plan.isVoid() || plan.getDynamicObject() == nullptr)
     {
-        error = juce::String::fromUTF8("A resposta do GPT não pôde ser interpretada.");
+        error = juce::String::fromUTF8("A resposta da IA local não pôde ser interpretada como JSON.");
         return false;
     }
 
@@ -363,13 +422,13 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     result.master.lowCutHz = juce::jlimit(10.0, 120.0, numberProperty(master, "low_cut_hz", 20.0));
     result.master.highCutHz = juce::jlimit(12000.0, 22000.0, numberProperty(master, "high_cut_hz", 20000.0));
     result.master.limiterThresholdDb = juce::jlimit(-12.0, 0.0, numberProperty(master, "limiter_threshold_db", -1.0));
-    result.master.rationale = stringProperty(master, "rationale", "Master definido pelo GPT.");
+    result.master.rationale = stringProperty(master, "rationale", juce::String::fromUTF8("Master definido pela IA local."));
 
     const auto trackPlans = getProperty(plan, "tracks");
     const auto* trackPlanArray = trackPlans.getArray();
     if (trackPlanArray == nullptr || trackPlanArray->isEmpty())
     {
-        error = juce::String::fromUTF8("O GPT não retornou planos para as faixas.");
+        error = juce::String::fromUTF8("A IA local não retornou planos para as faixas.");
         return false;
     }
 
@@ -392,10 +451,11 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
         trackPlan.compressorAttackMs = juce::jlimit(0.1, 200.0, numberProperty(item, "compressor_attack_ms", trackPlan.compressorAttackMs));
         trackPlan.compressorReleaseMs = juce::jlimit(5.0, 1000.0, numberProperty(item, "compressor_release_ms", trackPlan.compressorReleaseMs));
         trackPlan.reverbSend = juce::jlimit(0.0, 1.0, numberProperty(item, "reverb_send", trackPlan.reverbSend));
-        trackPlan.rationale = stringProperty(item, "rationale", "Plano definido pelo GPT.");
+        trackPlan.rationale = stringProperty(item, "rationale", juce::String::fromUTF8("Plano definido pela IA local."));
     }
 
-    result.summary = "GPT criou o plano de mix: " + stringProperty(plan, "summary", "plano estruturado recebido.");
+    result.summary = juce::String::fromUTF8("A IA local criou o plano de mix: ")
+                   + stringProperty(plan, "summary", juce::String::fromUTF8("plano estruturado recebido."));
     result.usedAi = true;
     error.clear();
     return true;
