@@ -4,7 +4,7 @@
 MixPlanner::Result MixPlanner::createPlan(const std::vector<MixTrack>& tracks) const
 {
     Result result;
-    result.master.rationale = "Master inicial conservadora: alvo -14 LUFS e teto true peak de -1 dBTP.";
+    result.master.rationale = juce::String::fromUTF8("Master inicial conservadora: alvo -14 LUFS e teto true peak de -1 dBTP.");
 
     for (const auto& track : tracks)
     {
@@ -25,13 +25,13 @@ MixPlanner::Result MixPlanner::createPlan(const std::vector<MixTrack>& tracks) c
         plan.compressorRatio = 2.0;
         plan.compressorAttackMs = 20.0;
         plan.compressorReleaseMs = 120.0;
-        plan.rationale = "Plano de segurança baseado nas métricas locais; o provedor de IA poderá refiná-lo.";
+        plan.rationale = juce::String::fromUTF8("Plano de segurança baseado nas métricas locais; o provedor de IA poderá refiná-lo.");
         result.tracks.push_back(plan);
     }
 
     result.summary = tracks.empty()
-        ? "Importe stems para gerar a primeira análise."
-        : "Análise concluída. Este é um plano inicial conservador; conecte um provedor de IA para refinamento musical.";
+        ? juce::String::fromUTF8("Importe stems para gerar a primeira análise.")
+        : juce::String::fromUTF8("Análise concluída. Este é um plano inicial conservador; conecte um provedor de IA para refinamento musical.");
     return result;
 }
 

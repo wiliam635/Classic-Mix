@@ -162,7 +162,7 @@ bool OpenAiMixService::saveApiKey(const juce::String& apiKey, juce::String& erro
     const auto file = settingsFile();
     if (! file.getParentDirectory().createDirectory())
     {
-        error = "Não foi possível criar a pasta local de configuração do GPT.";
+        error = juce::String::fromUTF8("Não foi possível criar a pasta local de configuração do GPT.");
         return false;
     }
 
@@ -176,7 +176,7 @@ bool OpenAiMixService::saveApiKey(const juce::String& apiKey, juce::String& erro
 
     if (! file.replaceWithText(trimmed + "\n"))
     {
-        error = "Não foi possível salvar a chave do GPT localmente.";
+        error = juce::String::fromUTF8("Não foi possível salvar a chave do GPT localmente.");
         return false;
     }
 
@@ -196,16 +196,16 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     const auto apiKey = loadApiKey();
     if (apiKey.isEmpty())
     {
-        error = "GPT não configurado. Use Configurar GPT ou defina OPENAI_API_KEY.";
+        error = juce::String::fromUTF8("GPT não configurado. Use Configurar GPT ou defina OPENAI_API_KEY.");
         return false;
     }
 
     auto* requestObject = new juce::DynamicObject();
     requestObject->setProperty("model", "gpt-6-astra");
     requestObject->setProperty("input",
-        "Você é um engenheiro de mixagem e masterização. Analise as métricas dos stems abaixo e devolva apenas o JSON solicitado. "
-        "Faça decisões conservadoras, preserve dinâmica, não invente instrumentos e explique brevemente cada decisão. "
-        "As faixas originais serão processadas localmente pelo aplicativo.\n\n" +
+        juce::String::fromUTF8("Você é um engenheiro de mixagem e masterização. Analise as métricas dos stems abaixo e devolva apenas o JSON solicitado. ")
+        + juce::String::fromUTF8("Faça decisões conservadoras, preserve dinâmica, não invente instrumentos e explique brevemente cada decisão. ")
+        + juce::String::fromUTF8("As faixas originais serão processadas localmente pelo aplicativo.\n\n") +
         juce::JSON::toString(buildMetrics(tracks), false));
 
     auto format = juce::JSON::parse(
@@ -226,7 +226,8 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     std::unique_ptr<juce::InputStream> stream(url.withPOSTData(payload).createInputStream(options));
     if (stream == nullptr)
     {
-        error = "Não foi possível conectar ao GPT (HTTP " + juce::String(statusCode) + ").";
+        error = juce::String::fromUTF8("Não foi possível conectar ao GPT (HTTP ") + juce::String(statusCode)
+              + juce::String::fromUTF8(").");
         return false;
     }
 
@@ -235,14 +236,14 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     const auto outputText = extractOutputText(response);
     if (outputText.isEmpty())
     {
-        error = "O GPT não retornou um plano estruturado.";
+        error = juce::String::fromUTF8("O GPT não retornou um plano estruturado.");
         return false;
     }
 
     const auto plan = juce::JSON::parse(outputText);
     if (plan.isVoid() || plan.getDynamicObject() == nullptr)
     {
-        error = "A resposta do GPT não pôde ser interpretada.";
+        error = juce::String::fromUTF8("A resposta do GPT não pôde ser interpretada.");
         return false;
     }
 
@@ -258,7 +259,7 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     const auto* trackPlanArray = trackPlans.getArray();
     if (trackPlanArray == nullptr || trackPlanArray->isEmpty())
     {
-        error = "O GPT não retornou planos para as faixas.";
+        error = juce::String::fromUTF8("O GPT não retornou planos para as faixas.");
         return false;
     }
 
