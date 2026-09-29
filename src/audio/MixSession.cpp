@@ -1,4 +1,5 @@
 #include "MixSession.h"
+#include "../ai/OpenAiMixService.h"
 
 bool MixSession::importFiles(const juce::Array<juce::File>& files, juce::String& error)
 {
@@ -40,6 +41,21 @@ void MixSession::analyzeAll()
 MixPlanner::Result MixSession::createPlan() const
 {
     return planner.createPlan(tracks);
+}
+
+MixPlanner::Result MixSession::createPlanWithGpt(juce::String& error) const
+{
+    return planner.createPlanWithGpt(tracks, error);
+}
+
+bool MixSession::hasAiApiKey() const
+{
+    return OpenAiMixService::hasApiKey();
+}
+
+bool MixSession::saveAiApiKey(const juce::String& key, juce::String& error) const
+{
+    return OpenAiMixService::saveApiKey(key, error);
 }
 
 bool MixSession::renderMix(const MixPlanner::Result& plan,

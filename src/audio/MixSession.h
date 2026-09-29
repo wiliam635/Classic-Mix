@@ -12,7 +12,10 @@ public:
     void clear();
     void analyzeAll();
     MixPlanner::Result createPlan() const;
+    MixPlanner::Result createPlanWithGpt(juce::String& error) const;
     bool renderMix(const MixPlanner::Result& plan, const juce::File& outputFile, juce::String& error) const;
+    bool hasAiApiKey() const;
+    bool saveAiApiKey(const juce::String& key, juce::String& error) const;
 
     const std::vector<MixTrack>& getTracks() const noexcept { return tracks; }
 
