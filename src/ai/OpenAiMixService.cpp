@@ -219,12 +219,11 @@ bool OpenAiMixService::requestPlan(const std::vector<MixTrack>& tracks,
     auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
         .withHttpRequestCmd("POST")
         .withExtraHeaders("Authorization: Bearer " + apiKey + "\r\nContent-Type: application/json\r\n")
-        .withRequestBody(payload)
         .withConnectionTimeoutMs(45000)
         .withStatusCode(&statusCode);
 
     juce::URL url("https://api.openai.com/v1/responses");
-    std::unique_ptr<juce::InputStream> stream(url.createInputStream(options));
+    std::unique_ptr<juce::InputStream> stream(url.withPOSTData(payload).createInputStream(options));
     if (stream == nullptr)
     {
         error = "Não foi possível conectar ao GPT (HTTP " + juce::String(statusCode) + ").";
