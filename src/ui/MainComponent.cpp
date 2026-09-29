@@ -35,7 +35,7 @@ private:
 class MainComponent::PlanJob final : public juce::ThreadPoolJob
 {
 public:
-    explicit PlanJob(MainComponent& owner) : ThreadPoolJob("GPT mix analysis"), owner(owner) {}
+    explicit PlanJob(MainComponent& owner) : ThreadPoolJob("Local AI mix analysis"), owner(owner) {}
 
     JobStatus runJob() override
     {
@@ -55,12 +55,12 @@ public:
             safeOwner->planLabel.setText(safeOwner->lastPlan.summary + "\n\n" + safeOwner->lastPlan.master.rationale,
                                          juce::dontSendNotification);
             if (usedAi)
-                safeOwner->setStatus("GPT analisou os stems e criou o plano. Revise e renderize a mix.");
+                safeOwner->setStatus(juce::String::fromUTF8("A IA local analisou os stems e criou o plano. Revise e renderize a mix."));
             else if (error.isNotEmpty())
-                safeOwner->setStatus(juce::String::fromUTF8("GPT indisponível: ") + error
-                                     + juce::String::fromUTF8(" Plano local criado."));
+                safeOwner->setStatus(juce::String::fromUTF8("IA local indisponível: ") + error
+                                     + juce::String::fromUTF8(" Plano conservador local criado."));
             else
-                safeOwner->setStatus(juce::String::fromUTF8("GPT não está configurado; plano local criado. Use Configurar GPT para ativar a IA."));
+                safeOwner->setStatus(juce::String::fromUTF8("IA local não está configurada; plano conservador local criado."));
 
             safeOwner->analyzeButton.setEnabled(true);
             safeOwner->importButton.setEnabled(true);
@@ -156,7 +156,7 @@ void MainComponent::buttonClicked(juce::Button* button)
 {
     if (button == &configureButton)
     {
-        configureGpt();
+        configureLocalAi();
     }
     else if (button == &importButton)
     {
@@ -189,8 +189,7 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &analyzeButton)
     {
-        setStatus(session.hasAiApiKey() ? "Analisando stems e consultando o GPT..."
-                                        : juce::String::fromUTF8("Analisando stems localmente; GPT ainda não foi configurado..."));
+        setStatus(juce::String::fromUTF8("Analisando stems com IA local..."));
         analyzeButton.setEnabled(false);
         importButton.setEnabled(false);
         renderButton.setEnabled(false);
@@ -265,13 +264,14 @@ void MainComponent::setStatus(const juce::String& message)
     pendingStatus = message;
 }
 
-void MainComponent::configureGpt()
+void MainComponent::configureLocalAi()
 {
-    auto* alert = new juce::AlertWindow("Configurar GPT",
-                                        juce::String::fromUTF8("A chave será salva somente neste Mac e nunca será enviada ao GitHub."),
+    auto* alert = new juce::AlertWindow(juce::String::fromUTF8("Configurar IA local"),
+                                        juce::String::fromUTF8("O Classic Mix usa o Ollama neste Mac. Nenhum áudio, métrica ou chave é enviado para a OpenAI."),
                                         juce::MessageBoxIconType::NoIcon);
-    alert->addTextEditor("apiKey", {}, "Chave da API", false);
-    alert->getTextEditor("apiKey")->setText(OpenAiMixService::loadApiKey(), false);
+    alert->addTextEditor("model", OpenAiMixService::loadLocalModel(), "Modelo local", false);
+    alert->addTextEditor("endpoint", "http://127.0.0.1:11434", "Ollama (somente informativo)", false);
+    alert->getTextEditor("endpoint")->setEnabled(false);
     alert->addButton("Salvar", 1, juce::KeyPress(juce::KeyPress::returnKey));
     alert->addButton("Cancelar", 0, juce::KeyPress(juce::KeyPress::escapeKey));
     alert->enterModalState(true,
@@ -280,9 +280,9 @@ void MainComponent::configureGpt()
                                if (result == 1)
                                {
                                    juce::String error;
-                                   if (session.saveAiApiKey(alert->getTextEditorContents("apiKey"), error))
-                                       setStatus(session.hasAiApiKey() ? "GPT configurado neste Mac."
-                                                                       : juce::String::fromUTF8("Chave do GPT removida; o plano local continuará disponível."));
+                                   if (session.saveLocalAiModel(alert->getTextEditorContents("model"), error))
+                                       setStatus(juce::String::fromUTF8("Modelo local configurado: ")
+                                                 + OpenAiMixService::loadLocalModel());
                                    else
                                        setStatus(error);
                                }

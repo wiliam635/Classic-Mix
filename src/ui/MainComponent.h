@@ -22,12 +22,12 @@ private:
     void timerCallback() override;
     void refreshTrackList();
     void setStatus(const juce::String&);
-    void configureGpt();
+    void configureLocalAi();
 
     juce::TextButton importButton { "Importar stems" };
     juce::TextButton analyzeButton { "Analisar e criar mix" };
     juce::TextButton renderButton { "Renderizar WAV" };
-    juce::TextButton configureButton { "Configurar GPT" };
+    juce::TextButton configureButton { "Configurar IA local" };
     juce::TextButton clearButton { "Limpar" };
     juce::Label title;
     juce::Label subtitle;
