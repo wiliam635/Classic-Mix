@@ -109,11 +109,18 @@ void MainComponent::buttonClicked(juce::Button* button)
 {
     if (button == &importButton)
     {
-        juce::FileChooser chooser("Importar stems", {}, "*.wav;*.aiff;*.flac;*.mp3");
-        if (chooser.browseForMultipleFilesToOpen())
+        fileChooser = std::make_unique<juce::FileChooser>("Importar stems", juce::File{}, "*.wav;*.aiff;*.flac;*.mp3");
+        fileChooser->launchAsync(juce::FileBrowserComponent::openMode
+                                     | juce::FileBrowserComponent::canSelectMultipleItems,
+                                 [this](const juce::FileChooser& chooser)
         {
+            const auto files = chooser.getResults();
+            fileChooser.reset();
+            if (files.isEmpty())
+                return;
+
             juce::String error;
-            if (session.importFiles(chooser.getResults(), error))
+            if (session.importFiles(files, error))
             {
                 refreshTrackList();
                 analyzeButton.setEnabled(true);
@@ -124,7 +131,7 @@ void MainComponent::buttonClicked(juce::Button* button)
             {
                 setStatus(error);
             }
-        }
+        });
     }
     else if (button == &analyzeButton)
     {
@@ -143,14 +150,22 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     else if (button == &renderButton)
     {
-        juce::FileChooser chooser("Salvar mix", juce::File::getSpecialLocation(juce::File::userMusicDirectory)
-                                     .getChildFile("Classic Mix.wav"), "*.wav");
-        if (chooser.browseForFileToSave(true))
+        fileChooser = std::make_unique<juce::FileChooser>("Salvar mix",
+                                                           juce::File::getSpecialLocation(juce::File::userMusicDirectory)
+                                                               .getChildFile("Classic Mix.wav"),
+                                                           "*.wav");
+        fileChooser->launchAsync(juce::FileBrowserComponent::saveMode,
+                                 [this](const juce::FileChooser& chooser)
         {
+            const auto output = chooser.getResult();
+            fileChooser.reset();
+            if (output == juce::File{})
+                return;
+
             juce::String error;
             setStatus("Renderizando mix e masterização inicial...");
             renderButton.setEnabled(false);
-            juce::Timer::callAfterDelay(10, [this, output = chooser.getResult(), error]() mutable
+            juce::Timer::callAfterDelay(10, [this, output, error]() mutable
             {
                 if (session.renderMix(lastPlan, output, error))
                 {
@@ -164,7 +179,7 @@ void MainComponent::buttonClicked(juce::Button* button)
                 }
                 renderButton.setEnabled(! lastPlan.tracks.empty());
             });
-        }
+        });
     }
     else if (button == &clearButton)
     {

@@ -31,6 +31,7 @@ private:
     juce::Label status;
     juce::ListBox trackList;
     std::unique_ptr<TrackListModel> trackModel;
+    std::unique_ptr<juce::FileChooser> fileChooser;
     juce::Label planLabel;
     juce::String pendingStatus;
     MixSession session;
